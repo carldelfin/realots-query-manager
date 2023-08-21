@@ -1,6 +1,6 @@
 #include "networkmessage.h"
 #include "definitions.h"
-
+#include "sha256.h"
 #include <string>
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,8 +18,8 @@
 #include <sys/ioctl.h>
 #include <ctime>    // For time()
 #include <cstdlib>  // For srand() and rand()
-
 #include <iostream>
+
 using namespace std;
 
 void log (std::string foo) {
@@ -50,20 +50,21 @@ THREAD_RETURN ConnectionHandler(void* dat);
 
 /* Database Connection */
 
-#define host    "localhost"
-#define username  "otserv"
-#define dbpass    "Cz7u89dmyPzHDNEL"
-#define database  "otserv"
+// get MySQL credentials from environment variables
+std::string MYSQL_PASS = std::getenv("MYSQL_PASSWORD");
+std::string MYSQL_NAME = std::getenv("MYSQL_NAME");
+
+#define host "localhost"
 
 /* Configuration section */
 
-std::string q_world        = "otserv";
+std::string q_world        = "RealOTS";
 unsigned short portNumber  = 17778;
 unsigned short servPort    = 7172;
 unsigned short rebootTime  = 6;
 
 void connect_to_db() {
-Database db("localhost","otserv","Cz7u89dmyPzHDNEL","otserv");
+Database db(host,MYSQL_NAME,MYSQL_PASS,MYSQL_NAME);
 Query q(db);
 }
 
@@ -73,6 +74,7 @@ int main(int argc, char *argv[])
 std::cout << "--------------------" << std::endl;
 std::cout << "OTServ QueryManager" << std::endl;
 std::cout << "--------------------" << std::endl;
+std::cout << "" << std::endl;
 std::cout << ":: Connecting to the MySQL database...";
 std::cout << "[done]" << std::endl;
 std::cout << ":: Starting OTServ QueryManager..." << std::endl;
@@ -197,7 +199,7 @@ SOCKET socket = *(SOCKET*)dat;
 
 NetworkMessage msg;
 while(msg.ReadFromSocket(socket)){
-	Database db(host,database,dbpass,username);
+	Database db(host,MYSQL_NAME,MYSQL_PASS,MYSQL_NAME);
 	Query q(db);
 	unsigned char packetId = msg.getByte();
 
@@ -225,13 +227,13 @@ while(msg.ReadFromSocket(socket)){
 	NetworkMessage writeMsg;
 	unsigned int accountNumber = msg.getU32();
 	std::string charName = msg.getString();
-	std::string charPass = msg.getString();
+	std::string charPass = sha256(msg.getString());
 	std::string charIP   = msg.getString();
 
-	std::cout << "accountNumber: " << dec << accountNumber << std::endl;
-	std::cout << "charName     : " << charName << std::endl;
-	std::cout << "charPass     : " << charPass << std::endl;
-	std::cout << "charIP       : " << charIP << std::endl;
+    std::cout << "accountNumber:     " << dec << accountNumber << std::endl;
+	std::cout << "charName:          " << charName << std::endl;
+	std::cout << "charPass (hashed): " << charPass << std::endl;
+	std::cout << "charIP:            " << charIP << std::endl;
 	std::cout << ":: Authenticating against database" << std::endl;
 
 	// Init some vars
@@ -302,7 +304,7 @@ while(msg.ReadFromSocket(socket)){
 	}
 	else if (accId) {
 		// Begin of login block
-		std::cout << ":: Login succes from accountId " << dec << accId << std::endl;
+		std::cout << ":: Login success from accountId " << dec << accId << std::endl;
 		writeMsg.addByte(0x00);
 		writeMsg.addU32(accId);
 		writeMsg.addString(charName.c_str()) ;
@@ -1092,7 +1094,7 @@ while(msg.ReadFromSocket(socket)){
 		std::cout << "Paiduntil: " << dec << paid << endl;
 		std::cout << "Unknown: " << dec << unknown << endl;
 
-		Database db("localhost","otserv","Cz7u89dmyPzHDNEL","otserv");
+        Database db(host,MYSQL_NAME,MYSQL_PASS,MYSQL_NAME);
 		Query q(db);
 		q.get_result("SELECT player_id, paid_until FROM houses WHERE house_id = " + int2str(houseID));
 		if(q.fetch_row()) {
@@ -1142,7 +1144,7 @@ while(msg.ReadFromSocket(socket)){
 		std::cout << "Received deleteHouseOwner packet (0x29)" << std::endl;
 		parseDebug(msg);
 
-		Database db("localhost","otserv","Cz7u89dmyPzHDNEL","otserv");
+        Database db(host,MYSQL_NAME,MYSQL_PASS,MYSQL_NAME);
 		Query q(db);
 		unsigned short houseID  = msg.getU16();
 		unsigned char unknown = msg.getByte(); // Might be type of eviction
@@ -1160,7 +1162,7 @@ while(msg.ReadFromSocket(socket)){
 		std::cout << "Received banishIPAddress Packet (0x1c)" << std::endl;
 		parseDebug(msg);
 
-		Database db("localhost","otserv","Cz7u89dmyPzHDNEL","otserv");
+        Database db(host,MYSQL_NAME,MYSQL_PASS,MYSQL_NAME);
 		Query q(db);
 
 		unsigned int gmID = msg.getU32();
@@ -1199,7 +1201,7 @@ while(msg.ReadFromSocket(socket)){
 	}
 	else if(packetId == 0x1e) {
 		std::cout << "Received addBuddy packet (0x1e)" << std::endl;
-		Database db("localhost","otserv","Cz7u89dmyPzHDNEL","otserv");
+        Database db(host,MYSQL_NAME,MYSQL_PASS,MYSQL_NAME);
 		Query q(db);
 		unsigned int accountNumber = msg.getU32();
 		unsigned int buddyID = msg.getU32();
@@ -1227,7 +1229,7 @@ while(msg.ReadFromSocket(socket)){
 	}
 	else if(packetId == 0x1f) {
 		std::cout << "Received removeBuddy packet (0x1f)" << std::endl;
-		Database db("localhost","otserv","Cz7u89dmyPzHDNEL","otserv");
+        Database db(host,MYSQL_NAME,MYSQL_PASS,MYSQL_NAME);
 		Query q(db);
 		unsigned int accountNumber = msg.getU32();
 		unsigned int buddyID = msg.getU32();
@@ -1425,7 +1427,7 @@ while(msg.ReadFromSocket(socket)){
 		std::cout << "Unknown1: " << dec << unknown << endl;
 		std::cout << "Unknown2: " << dec << unknown2 << endl;
 
-		Database db("localhost","otserv","Cz7u89dmyPzHDNEL","otserv");
+        Database db(host,MYSQL_NAME,MYSQL_PASS,MYSQL_NAME);
 		Query q(db);
 		q.get_result("SELECT house_id FROM house WHERE bidder_id = " + int2str(bidder));
 		if(q.fetch_row()) {
